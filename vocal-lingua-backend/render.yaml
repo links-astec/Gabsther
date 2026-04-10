@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: gabsther-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: gunicorn vocallingua.wsgi:application --bind 0.0.0.0:$PORT --workers 2
+    envVars:
+      - key: SECRET_KEY
+        value: k=64o$ezd1^0hu56i2-z=414*3dyx@ki)5yqrte!mtwua3)1*6
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: gabsther-api.onrender.com,localhost
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://gabsther.vercel.app,http://localhost:3000
+      - key: GROQ_API_KEY
+        value: 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
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: JWT_ACCESS_TOKEN_LIFETIME_MINUTES
+        value: "60"
+      - key: JWT_REFRESH_TOKEN_LIFETIME_DAYS
+        value: "30"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gabsther-db
+          property: connectionString
+
+databases:
+  - name: gabsther-db
+    plan: free
