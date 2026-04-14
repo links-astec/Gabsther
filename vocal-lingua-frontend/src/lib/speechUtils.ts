@@ -6,6 +6,13 @@
  * - SpeechSynthesis: text → voice (TTS)
  */
 
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,22 +53,22 @@ export function hasSpeechSynthesis(): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class SpeechRecognizer {
-  private recognition: SpeechRecognition | null = null;
+  private recognition: any = null;
   private isListening = false;
 
   constructor(private options: RecognitionOptions) {
     if (!hasSpeechRecognition()) return;
 
     const SpeechRecognitionAPI =
-      (window as Window & typeof globalThis & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition ||
-      window.SpeechRecognition;
+      (window as any).webkitSpeechRecognition ||
+      (window as any).SpeechRecognition;
 
     this.recognition = new SpeechRecognitionAPI();
     this.recognition.lang = options.language || 'fr-FR';
     this.recognition.continuous = options.continuous ?? false;
     this.recognition.interimResults = options.interimResults ?? true;
 
-    this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+    this.recognition.onresult = (event: any) => {
       // Build the full running transcript from ALL results, not just the last one.
       // This means mid-sentence corrections are reflected in the live display.
       let finalText = '';
@@ -85,7 +92,7 @@ export class SpeechRecognizer {
       }
     };
 
-    this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    this.recognition.onerror = (event: any) => {
       options.onError?.(event.error);
     };
 

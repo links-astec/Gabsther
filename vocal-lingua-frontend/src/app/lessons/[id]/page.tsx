@@ -220,7 +220,7 @@ function LessonDetailContent() {
   const phases = getPhases();
   const phaseIndex = phases.indexOf(phase);
   const contentPhases = phases.filter((p) => p !== 'intro' && p !== 'complete');
-  const contentPhaseIndex = contentPhases.indexOf(phase);
+  const contentPhaseIndex = (phase !== 'intro' && phase !== 'complete') ? contentPhases.indexOf(phase) : -1;
   const progress = phaseIndex >= 0 ? phaseIndex / (phases.length - 1) : 0;
 
   const advancePhase = () => {
