@@ -3,7 +3,7 @@ services:
     name: gabsther-api
     runtime: python
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    startCommand: python manage.py migrate --noinput && python manage.py seed_lessons && gunicorn vocallingua.wsgi:application --bind 0.0.0.0:$PORT --workers 2
+    startCommand: bash start.sh
     envVars:
       - key: SECRET_KEY
         value: k=64o$ezd1^0hu56i2-z=414*3dyx@ki)5yqrte!mtwua3)1*6
