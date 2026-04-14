@@ -61,12 +61,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         # Add user info alongside tokens
-        data['user'] = {
-            'id': self.user.id,
-            'email': self.user.email,
-            'username': self.user.username,
-            'first_name': self.user.first_name,
-            'last_name': self.user.last_name,
+        user = self.user  # type: ignore[attr-defined]
+        data['user'] = {  # type: ignore[index]
+            'id': user.pk,
+            'email': user.email,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
         }
         return data
 

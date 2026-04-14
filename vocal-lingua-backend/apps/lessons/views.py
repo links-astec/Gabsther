@@ -67,7 +67,7 @@ class LessonListView(generics.ListAPIView):
     ordering = ['order']
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
-    def get_queryset(self):
+    def get_queryset(self):  # type: ignore[override]
         return Lesson.objects.filter(is_published=True).select_related('language')
 
 
@@ -76,7 +76,7 @@ class LessonDetailView(generics.RetrieveAPIView):
     serializer_class = LessonDetailSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
-    def get_queryset(self):
+    def get_queryset(self):  # type: ignore[override]
         return Lesson.objects.filter(is_published=True).select_related('language')
 
 
@@ -96,13 +96,14 @@ class MarkLessonCompleteView(APIView):
 
         serializer = MarkCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        vdata: dict = serializer.validated_data  # type: ignore[assignment]
 
         progress, _ = LessonProgress.objects.get_or_create(
             user=request.user, lesson=lesson
         )
         progress.mark_complete(
-            score=serializer.validated_data['score'],
-            time_spent=serializer.validated_data['time_spent_seconds'],
+            score=vdata['score'],
+            time_spent=vdata['time_spent_seconds'],
         )
 
         # Record streak activity
@@ -120,7 +121,7 @@ class UserProgressListView(generics.ListAPIView):
     serializer_class = LessonProgressSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
+    def get_queryset(self):  # type: ignore[override]
         return LessonProgress.objects.filter(
             user=self.request.user
         ).select_related('lesson', 'lesson__language')

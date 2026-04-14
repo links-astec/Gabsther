@@ -86,7 +86,7 @@ WSGI_APPLICATION = 'vocallingua.wsgi.application'
 # ─────────────────────────────────────────────────────────────────────────────
 import dj_database_url
 
-_db_url = config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+_db_url: str = config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')  # type: ignore[assignment]
 DATABASES = {
     'default': dj_database_url.parse(_db_url, conn_max_age=600)
 }

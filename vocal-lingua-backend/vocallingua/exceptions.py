@@ -36,10 +36,11 @@ def custom_exception_handler(exc, context):
         )
 
     # Ensure all error responses have a 'detail' key
-    if 'detail' not in response.data and isinstance(response.data, dict):
+    response_data: dict = response.data  # type: ignore[assignment]
+    if isinstance(response_data, dict) and 'detail' not in response_data:
         if response.status_code >= 500:
             response.data = {'detail': 'A server error occurred. Our team has been notified.'}
         else:
-            response.data = {'detail': str(response.data)}
+            response.data = {'detail': str(response_data)}
 
     return response
