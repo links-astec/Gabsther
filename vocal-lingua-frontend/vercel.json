@@ -2,7 +2,10 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "https://gabsther-tmmi.onrender.com/api"
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_API_URL": "https://gabsther-tmmi.onrender.com/api",
+      "NEXT_PUBLIC_APP_URL": "https://gabsther-sand.vercel.app"
+    }
   }
 }
