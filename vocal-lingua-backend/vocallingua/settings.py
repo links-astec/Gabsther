@@ -144,6 +144,7 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',
     ),
+    'EXCEPTION_HANDLER': 'vocallingua.exceptions.custom_exception_handler',
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -193,3 +194,48 @@ CORS_ALLOW_HEADERS = [
 # ─────────────────────────────────────────────────────────────────────────────
 GROQ_API_KEY = config('GROQ_API_KEY', default='')
 GROQ_MODEL = config('GROQ_MODEL', default='llama-3.3-70b-versatile')
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGGING — See errors and warnings in production
+# ─────────────────────────────────────────────────────────────────────────────
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'apps.users': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'apps.voice': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

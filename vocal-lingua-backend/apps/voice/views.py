@@ -6,6 +6,7 @@ Gabsther — Voice / Chat Views
 """
 
 import json
+from typing import Any
 from django.conf import settings
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -31,12 +32,12 @@ class VoiceSessionListCreateView(generics.ListCreateAPIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_serializer_class(self):
+    def get_serializer_class(self):  # type: ignore[override]
         if self.request.method == 'POST':
             return CreateVoiceSessionSerializer
         return VoiceSessionSerializer
 
-    def get_queryset(self):
+    def get_queryset(self):  # type: ignore[override]
         return VoiceSession.objects.filter(
             user=self.request.user
         ).select_related('lesson', 'language')[:50]
@@ -46,10 +47,11 @@ class VoiceSessionListCreateView(generics.ListCreateAPIView):
         # Record streak for voice activity
         Streak.record_activity(self.request.user, activity_type='voice')
         # Credit speaking time to profile
-        if hasattr(self.request.user, 'profile'):
+        profile = getattr(self.request.user, 'profile', None)
+        if profile is not None:
             minutes = session.duration_seconds // 60
-            self.request.user.profile.total_speaking_minutes += minutes
-            self.request.user.profile.save(update_fields=['total_speaking_minutes'])
+            profile.total_speaking_minutes += minutes
+            profile.save(update_fields=['total_speaking_minutes'])
 
 
 class VoiceSessionDetailView(generics.RetrieveAPIView):
@@ -57,7 +59,7 @@ class VoiceSessionDetailView(generics.RetrieveAPIView):
     serializer_class = VoiceSessionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
+    def get_queryset(self):  # type: ignore[override]
         return VoiceSession.objects.filter(user=self.request.user)
 
 
@@ -68,12 +70,12 @@ class VoiceSessionDetailView(generics.RetrieveAPIView):
 class ChatProxyView(APIView):
     """
     POST /api/voice/chat/
-    Proxies the user's spoken text to OpenAI GPT and returns:
+    Proxies the user's spoken text to Groq and returns:
     - reply: the AI's French response
     - corrections: [{original, corrected, explanation}]
     - english_translation: optional translation of the reply
 
-    If OPENAI_API_KEY is not set, returns a mock response for dev.
+    If GROQ_API_KEY is not set, returns a mock response for dev.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -97,7 +99,7 @@ Rules:
     def post(self, request):
         serializer = ChatMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+        data: dict[str, Any] = serializer.validated_data  # type: ignore[assignment]
 
         if not settings.GROQ_API_KEY:
             return self._mock_response(data['message'])
@@ -108,8 +110,9 @@ Rules:
 
             # Build user level
             level = 'A1'
-            if hasattr(request.user, 'profile') and request.user.profile:
-                level = request.user.profile.level
+            profile = getattr(request.user, 'profile', None)
+            if profile is not None:
+                level = profile.level
 
             system_prompt = self.SYSTEM_PROMPT_TEMPLATE.format(
                 language='French' if data['language_code'] == 'fr' else data['language_code'],
@@ -118,7 +121,7 @@ Rules:
             )
 
             # Build message history
-            messages = [{'role': 'system', 'content': system_prompt}]
+            messages: list[dict[str, str]] = [{'role': 'system', 'content': system_prompt}]
             for msg in data['history'][-10:]:
                 messages.append({
                     'role': msg.get('role', 'user'),
@@ -128,12 +131,12 @@ Rules:
 
             response = client.chat.completions.create(
                 model=settings.GROQ_MODEL,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 max_tokens=500,
                 temperature=0.7,
             )
 
-            reply_text = response.choices[0].message.content
+            reply_text: str = response.choices[0].message.content or ''
             return self._parse_response(reply_text)
 
         except Exception as e:
@@ -171,7 +174,7 @@ Rules:
         })
 
     def _mock_response(self, user_message: str) -> Response:
-        """Dev fallback when no OpenAI key is configured."""
+        """Dev fallback when no Groq key is configured."""
         return Response({
             'reply': (
                 "Bonjour ! C'est super que vous pratiquez votre français. "

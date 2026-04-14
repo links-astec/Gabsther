@@ -10,9 +10,9 @@ services:
       - key: DEBUG
         value: "False"
       - key: ALLOWED_HOSTS
-        value: gabsther-api.onrender.com,localhost
+        value: gabsther-tmmi.onrender.com,localhost
       - key: CORS_ALLOWED_ORIGINS
-        value: https://gabsther.vercel.app,http://localhost:3000
+        value: https://gabsther-sand.vercel.app,http://localhost:3000
       - key: GROQ_API_KEY
         value: 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
       - key: GROQ_MODEL

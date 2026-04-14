@@ -6,6 +6,7 @@ User: me, update profile, onboarding
 Streak: current streak, heatmap data, record activity
 """
 
+import logging
 from django.utils import timezone
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -24,6 +25,8 @@ from .serializers import (
     StreakSummarySerializer,
 )
 
+logger = logging.getLogger(__name__)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AUTH VIEWS
@@ -36,27 +39,51 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.save()
 
-        # Issue tokens immediately after registration
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'username': user.username,
-            },
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-        }, status=status.HTTP_201_CREATED)
+            # Create default profile
+            UserProfile.objects.get_or_create(user=user)
+
+            # Issue tokens immediately after registration
+            refresh = RefreshToken.for_user(user)
+            logger.info(f'User registered: {user.email}')
+            return Response({
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                },
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f'Registration error: {str(e)}', exc_info=True)
+            return Response(
+                {'detail': f'Registration failed: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class LoginView(TokenObtainPairView):
     """POST /api/auth/login/ — returns access + refresh JWT tokens."""
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            data: dict = request.data  # type: ignore[assignment]
+            identifier = data.get('email', data.get('username', 'unknown'))
+            logger.info(f'Login attempt for: {identifier}')
+            return super().post(request, *args, **kwargs)
+        except Exception as e:
+            logger.error(f'Login error: {str(e)}', exc_info=True)
+            return Response(
+                {'detail': 'Invalid email or password.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
 
 class LogoutView(APIView):
