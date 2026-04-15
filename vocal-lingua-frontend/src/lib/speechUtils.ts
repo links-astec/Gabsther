@@ -256,15 +256,41 @@ export function getVoicesForLanguage(langCode: string): SpeechSynthesisVoice[] {
 
 /**
  * Warm up TTS — call this inside a user-gesture handler (button click) to
- * unlock audio on iOS Safari before the first async speak() call.
+ * unlock audio on iOS Safari and Chrome Android before the async speak() call.
+ *
+ * IMPORTANT: Do NOT call cancel() after speak() here. The utterance must
+ * actually start playing so the browser records a real "play within user
+ * gesture" event. Chrome Android blocks future async speak() calls
+ * (error: 'not-allowed') if the unlock utterance is cancelled before it plays.
+ * The utterance is a zero-width space at max rate — it completes in < 50 ms.
  */
 export function initSpeechSynthesis() {
   if (!hasSpeechSynthesis()) return;
-  // Trigger voice loading
   loadVoices();
-  // Play a silent utterance to unlock the audio context on iOS
-  const u = new SpeechSynthesisUtterance('');
+  const u = new SpeechSynthesisUtterance('\u200B'); // zero-width space — plays instantly
   u.volume = 0;
+  u.rate = 10;
   window.speechSynthesis.speak(u);
-  window.speechSynthesis.cancel();
+}
+
+/**
+ * Unlock the Web Audio context — required on Chrome Android to allow any
+ * audio playback (including speechSynthesis) outside a user gesture.
+ * Call this inside the same gesture handler as initSpeechSynthesis().
+ */
+let _audioCtx: AudioContext | null = null;
+export function unlockAudioContext() {
+  if (typeof window === 'undefined') return;
+  try {
+    const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return;
+    if (!_audioCtx) _audioCtx = new AC() as AudioContext;
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    // Play a 1-frame silent buffer to mark this AudioContext as "user activated"
+    const buf = _audioCtx.createBuffer(1, 1, 22050);
+    const src = _audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_audioCtx.destination);
+    src.start(0);
+  } catch { /* ignore — not all browsers support AudioContext */ }
 }

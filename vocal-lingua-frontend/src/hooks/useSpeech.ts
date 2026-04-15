@@ -13,6 +13,7 @@ import {
   hasSpeechRecognition,
   hasSpeechSynthesis,
   initSpeechSynthesis,
+  unlockAudioContext,
 } from '@/lib/speechUtils';
 
 interface UseSpeechOptions {
@@ -81,10 +82,13 @@ export function useSpeech({
   const startListening = useCallback(() => {
     if (!hasSpeechRecognition() || isListening) return;
 
-    // Re-init TTS inside this user-gesture handler — required to unlock audio
-    // on iOS Safari before the async speak() call fires after the API responds.
-    initSpeechSynthesis();
+    // Stop any current speech first, THEN unlock — order matters.
+    // If we called initSpeechSynthesis() before stopSpeaking(), the cancel()
+    // inside stopSpeaking() would kill the unlock utterance before it plays,
+    // which prevents Chrome Android from granting permission for async speak().
     stopSpeaking();
+    unlockAudioContext();   // unlock Web Audio context (Chrome Android)
+    initSpeechSynthesis();  // speak silent utterance to unlock speechSynthesis
     setIsSpeaking(false);
     accumulatedRef.current = '';
     clearSubmitTimer();
