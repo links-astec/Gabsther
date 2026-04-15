@@ -81,6 +81,9 @@ export function useSpeech({
   const startListening = useCallback(() => {
     if (!hasSpeechRecognition() || isListening) return;
 
+    // Re-init TTS inside this user-gesture handler — required to unlock audio
+    // on iOS Safari before the async speak() call fires after the API responds.
+    initSpeechSynthesis();
     stopSpeaking();
     setIsSpeaking(false);
     accumulatedRef.current = '';

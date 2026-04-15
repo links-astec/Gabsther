@@ -49,6 +49,39 @@ export function hasSpeechSynthesis(): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Voice cache — loaded once via voiceschanged event
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _voicesCache: SpeechSynthesisVoice[] = [];
+
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    if (!hasSpeechSynthesis()) return resolve([]);
+
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      _voicesCache = voices;
+      return resolve(voices);
+    }
+
+    // On mobile (especially iOS/Android) voices load asynchronously
+    const handler = () => {
+      _voicesCache = window.speechSynthesis.getVoices();
+      resolve(_voicesCache);
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', handler, { once: true });
+
+    // Fallback: resolve empty after 2 s so we don't hang indefinitely
+    setTimeout(() => resolve(_voicesCache), 2000);
+  });
+}
+
+// Pre-load voices as soon as the module is imported (no user gesture needed)
+if (typeof window !== 'undefined' && hasSpeechSynthesis()) {
+  loadVoices();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Speech Recognition (STT)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -56,7 +89,7 @@ export class SpeechRecognizer {
   private recognition: any = null;
   private isListening = false;
 
-  constructor(private options: RecognitionOptions) {
+  constructor(options: RecognitionOptions) {
     if (!hasSpeechRecognition()) return;
 
     const SpeechRecognitionAPI =
@@ -69,8 +102,6 @@ export class SpeechRecognizer {
     this.recognition.interimResults = options.interimResults ?? true;
 
     this.recognition.onresult = (event: any) => {
-      // Build the full running transcript from ALL results, not just the last one.
-      // This means mid-sentence corrections are reflected in the live display.
       let finalText = '';
       let interimText = '';
 
@@ -84,10 +115,8 @@ export class SpeechRecognizer {
       }
 
       if (interimText) {
-        // Still in-progress — show the complete picture (final + current interim)
         options.onResult(finalText + interimText, false);
       } else if (finalText) {
-        // Every segment is final — pass the whole thing
         options.onResult(finalText, true);
       }
     };
@@ -128,7 +157,14 @@ export class SpeechRecognizer {
 // Speech Synthesis (TTS)
 // ─────────────────────────────────────────────────────────────────────────────
 
-let currentUtterance: SpeechSynthesisUtterance | null = null;
+let iosResumeTimer: ReturnType<typeof setInterval> | null = null;
+
+function clearIosTimer() {
+  if (iosResumeTimer) {
+    clearInterval(iosResumeTimer);
+    iosResumeTimer = null;
+  }
+}
 
 export function speak(
   text: string,
@@ -140,45 +176,67 @@ export function speak(
       return;
     }
 
-    // Cancel any ongoing speech
+    clearIosTimer();
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = options.language || 'fr-FR';
-    utterance.rate = options.rate || 0.9;      // Slightly slower for learners
-    utterance.pitch = options.pitch || 1;
-    utterance.volume = options.volume || 1;
+    // Small delay after cancel — required on some mobile browsers
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = options.language || 'fr-FR';
+      utterance.rate = options.rate ?? 0.9;
+      utterance.pitch = options.pitch ?? 1;
+      utterance.volume = options.volume ?? 1;
 
-    // Try to find a native French voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(
-      (v) =>
-        v.lang.startsWith(utterance.lang.split('-')[0]) &&
-        (options.preferredVoiceName
-          ? v.name.includes(options.preferredVoiceName)
-          : true)
-    );
-    if (preferred) utterance.voice = preferred;
+      // Voice selection — use cached voices, fall back to default (safe on mobile)
+      const voices = _voicesCache.length > 0
+        ? _voicesCache
+        : window.speechSynthesis.getVoices();
 
-    utterance.onend = () => resolve();
-    utterance.onerror = (e) => {
-      // 'interrupted' means cancel() was called intentionally — treat as clean stop
-      if (e.error === 'interrupted' || e.error === 'canceled') {
+      const langPrefix = utterance.lang.split('-')[0];
+      const preferred = voices.find(
+        (v) =>
+          v.lang.startsWith(langPrefix) &&
+          (options.preferredVoiceName
+            ? v.name.includes(options.preferredVoiceName)
+            : true)
+      );
+      if (preferred) utterance.voice = preferred;
+
+      utterance.onend = () => {
+        clearIosTimer();
         resolve();
-      } else {
-        reject(new Error(e.error));
-      }
-    };
+      };
 
-    currentUtterance = utterance;
-    window.speechSynthesis.speak(utterance);
+      utterance.onerror = (e) => {
+        clearIosTimer();
+        if (e.error === 'interrupted' || e.error === 'canceled') {
+          resolve();
+        } else {
+          reject(new Error(e.error));
+        }
+      };
+
+      // (utterance tracked by speechSynthesis internally)
+      window.speechSynthesis.speak(utterance);
+
+      // iOS Safari pauses speechSynthesis after ~15 s of inactivity.
+      // Calling resume() every 10 s keeps it alive for long responses.
+      iosResumeTimer = setInterval(() => {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        } else {
+          clearIosTimer();
+        }
+      }, 10_000);
+    }, 50);
   });
 }
 
 export function stopSpeaking() {
+  clearIosTimer();
   if (hasSpeechSynthesis()) {
     window.speechSynthesis.cancel();
-    currentUtterance = null;
   }
 }
 
@@ -190,14 +248,21 @@ export function isSpeaking(): boolean {
 /** Get available voices for a given language */
 export function getVoicesForLanguage(langCode: string): SpeechSynthesisVoice[] {
   if (!hasSpeechSynthesis()) return [];
-  return window.speechSynthesis
-    .getVoices()
-    .filter((v) => v.lang.startsWith(langCode));
+  const voices = _voicesCache.length > 0
+    ? _voicesCache
+    : window.speechSynthesis.getVoices();
+  return voices.filter((v) => v.lang.startsWith(langCode));
 }
 
-/** Warm up TTS (Chrome requires a user gesture to init voices) */
+/**
+ * Warm up TTS — call this inside a user-gesture handler (button click) to
+ * unlock audio on iOS Safari before the first async speak() call.
+ */
 export function initSpeechSynthesis() {
   if (!hasSpeechSynthesis()) return;
+  // Trigger voice loading
+  loadVoices();
+  // Play a silent utterance to unlock the audio context on iOS
   const u = new SpeechSynthesisUtterance('');
   u.volume = 0;
   window.speechSynthesis.speak(u);

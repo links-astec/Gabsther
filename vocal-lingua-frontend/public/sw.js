@@ -1,73 +1,73 @@
 /**
  * Gabsther — Service Worker
- * Provides offline support for lessons and basic navigation.
  *
- * Strategy:
- * - Static shell (HTML, CSS, JS): Cache-first
- * - API calls to /api/lessons: Network-first, fallback to cache
- * - Everything else: Network-first, fallback to /offline
+ * Cache strategies:
+ * - Next.js static bundles (/_next/static/): cache-first (immutable hashes)
+ * - Lesson API (/api/lessons*):              network-first, cache fallback
+ * - Navigation (HTML pages):                 network-first, cache fallback
+ * - Everything else:                         network-first, cache fallback
  */
 
-const CACHE_NAME = 'gabsther-v1';
-const LESSON_CACHE = 'gabsther-lessons-v1';
+const SHELL_CACHE  = 'gabsther-shell-v2';
+const STATIC_CACHE = 'gabsther-static-v2';
+const LESSON_CACHE = 'gabsther-lessons-v2';
 
-// Resources to pre-cache on install
-const PRECACHE_URLS = [
-  '/',
-  '/dashboard',
-  '/lessons',
-  '/offline',
-];
+const PRECACHE_URLS = ['/', '/dashboard', '/lessons', '/offline'];
 
 // ─── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS).catch(() => {
-        // Don't fail install if pre-cache URLs don't exist yet
-      });
-    })
+    caches.open(SHELL_CACHE).then((cache) =>
+      cache.addAll(PRECACHE_URLS).catch(() => {})
+    )
   );
   self.skipWaiting();
 });
 
-// ─── Activate ─────────────────────────────────────────────────────────────────
+// ─── Activate — purge old caches ─────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
+  const KEEP = new Set([SHELL_CACHE, STATIC_CACHE, LESSON_CACHE]);
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME && name !== LESSON_CACHE)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys().then((names) =>
+      Promise.all(names.filter((n) => !KEEP.has(n)).map((n) => caches.delete(n)))
+    )
   );
   self.clients.claim();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Always returns a Response — never undefined */
 function offlineFallback() {
   return caches.match('/offline').then(
     (cached) => cached || new Response('Offline', { status: 503 })
   );
 }
 
-async function networkFirstWithCache(request, cacheName) {
+/** Cache-first: serve from cache, fetch+store on miss. For immutable assets. */
+async function cacheFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request);
+    if (response.ok) cache.put(request, response.clone());
+    return response;
+  } catch {
+    return new Response('', { status: 503 });
+  }
+}
+
+/** Network-first: try network, fall back to cache. */
+async function networkFirst(request, cacheName, fallback) {
   const cache = await caches.open(cacheName);
   try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
+    const response = await fetch(request);
+    if (response.ok) cache.put(request, response.clone());
+    return response;
   } catch {
     const cached = await cache.match(request);
-    return cached || new Response(JSON.stringify({ error: 'Offline' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    if (cached) return cached;
+    return fallback ? fallback() : new Response('', { status: 503 });
   }
 }
 
@@ -76,29 +76,24 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Cache lesson API responses for offline access
+  // ── Next.js immutable static assets: cache-first (/_next/static/) ──────────
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE));
+    return;
+  }
+
+  // ── Lesson API responses (same-origin /api/ or cross-origin Render) ─────────
   if (url.pathname.startsWith('/api/lessons') && request.method === 'GET') {
-    event.respondWith(networkFirstWithCache(request, LESSON_CACHE));
+    event.respondWith(networkFirst(request, LESSON_CACHE, null));
     return;
   }
 
-  // Navigation requests: network-first, fall back to cached page or /offline
+  // ── Navigation (HTML pages): network-first, fall back to shell or /offline ──
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(async () => {
-        const cached = await caches.match(request);
-        if (cached) return cached;
-        return offlineFallback();
-      })
-    );
+    event.respondWith(networkFirst(request, SHELL_CACHE, offlineFallback));
     return;
   }
 
-  // Default: network-first, fall back to cache, then undefined → skip (let browser handle)
-  event.respondWith(
-    fetch(request).catch(async () => {
-      const cached = await caches.match(request);
-      return cached || new Response('', { status: 503 });
-    })
-  );
+  // ── Default: network-first with cache fallback ───────────────────────────────
+  event.respondWith(networkFirst(request, SHELL_CACHE, null));
 });

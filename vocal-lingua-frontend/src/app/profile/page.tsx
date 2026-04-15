@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   LogOut, Settings, Edit3, Trophy, Zap, BookOpen, Mic,
-  Target, Flame, MessageCircle, Star, type LucideIcon,
+  Target, Flame, MessageCircle, Star, Check, X,
+  type LucideIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -30,13 +31,22 @@ const BADGES: Array<{ icon: LucideIcon; color: string; label: string; threshold:
 ];
 
 function ProfileContent() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { streak } = useStreak();
   const router = useRouter();
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
   const [stats, setStats] = useState<ProgressStats | null>(null);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [goalMinutes, setGoalMinutes] = useState(user?.profile?.daily_goal_minutes ?? 10);
+
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [editForm, setEditForm] = useState({
+    first_name: user?.first_name ?? '',
+    last_name: user?.last_name ?? '',
+    username: user?.username ?? '',
+  });
 
   const profile = user?.profile;
   const displayName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.username || 'Learner';
@@ -49,6 +59,24 @@ function ProfileContent() {
   const handleLogout = async () => {
     await logout();
     router.push('/');
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    setProfileError('');
+    try {
+      await userApi.updateMe({
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        username: editForm.username,
+      });
+      await refreshUser();
+      setIsEditingProfile(false);
+    } catch (err: unknown) {
+      setProfileError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleSaveGoal = async () => {
@@ -81,7 +109,7 @@ function ProfileContent() {
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="flex items-center gap-4">
-            <div className="relative">
+            <div className="relative shrink-0">
               <img
                 src={profile?.avatar_url || avatarUrl(displayName)}
                 alt={displayName}
@@ -94,22 +122,78 @@ function ProfileContent() {
               </div>
             </div>
 
-            <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate">{displayName}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="text-xs font-bold bg-brand-blue/10 text-brand-blue dark:bg-brand-blue/20 dark:text-brand-blue-light px-2 py-0.5 rounded-full">
-                  {profile?.level || 'A1'}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {LEVEL_LABELS[profile?.level || 'A1']}
-                </span>
+            {isEditingProfile ? (
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    value={editForm.first_name}
+                    onChange={(e) => setEditForm((f) => ({ ...f, first_name: e.target.value }))}
+                    placeholder="First name"
+                    className="flex-1 min-w-0 text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.06] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+                  />
+                  <input
+                    value={editForm.last_name}
+                    onChange={(e) => setEditForm((f) => ({ ...f, last_name: e.target.value }))}
+                    placeholder="Last name"
+                    className="flex-1 min-w-0 text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.06] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+                  />
+                </div>
+                <input
+                  value={editForm.username}
+                  onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))}
+                  placeholder="Username"
+                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.06] text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+                />
+                {profileError && (
+                  <p className="text-xs text-red-500">{profileError}</p>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate">{displayName}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="text-xs font-bold bg-brand-blue/10 text-brand-blue dark:bg-brand-blue/20 dark:text-brand-blue-light px-2 py-0.5 rounded-full">
+                    {profile?.level || 'A1'}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {LEVEL_LABELS[profile?.level || 'A1']}
+                  </span>
+                </div>
+              </div>
+            )}
 
-            <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/[0.07] rounded-xl transition-colors">
-              <Edit3 size={16} />
-            </button>
+            {isEditingProfile ? (
+              <div className="flex flex-col gap-1.5 shrink-0">
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile}
+                  className="p-1.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue/90 disabled:opacity-50 transition-colors"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  onClick={() => { setIsEditingProfile(false); setProfileError(''); }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/[0.07] rounded-lg transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setEditForm({
+                    first_name: user?.first_name ?? '',
+                    last_name: user?.last_name ?? '',
+                    username: user?.username ?? '',
+                  });
+                  setIsEditingProfile(true);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/[0.07] rounded-xl transition-colors shrink-0"
+              >
+                <Edit3 size={16} />
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-white/[0.06]">
