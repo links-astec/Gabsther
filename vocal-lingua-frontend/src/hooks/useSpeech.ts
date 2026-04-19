@@ -139,8 +139,14 @@ export function useSpeech({
     });
 
     recognizerRef.current = recognizer;
-    recognizer.start();
+    // Show listening UI immediately, but delay the actual mic start by 200ms.
+    // On iOS, starting the microphone interrupts the audio session and can cancel
+    // the silent unlock utterance before its onend fires. The 200ms gap lets the
+    // unlock utterance complete so iOS grants permission for the later async speak().
     setIsListening(true);
+    setTimeout(() => {
+      recognizerRef.current?.start();
+    }, 200);
   }, [language, isListening, pauseDelay, clearSubmitTimer, flushAccumulated]);
 
   const stopListening = useCallback(() => {

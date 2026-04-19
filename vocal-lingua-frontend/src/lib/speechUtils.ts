@@ -178,8 +178,11 @@ export function speak(
 
     clearIosTimer();
     window.speechSynthesis.cancel();
+    // resume() in case iOS left the synthesizer in a paused state after mic use
+    window.speechSynthesis.resume();
 
-    // Small delay after cancel — required on some mobile browsers
+    // 150ms gives iOS time to switch the audio session from record → playback.
+    // 50ms was too short — the utterance would start but be silently dropped.
     setTimeout(() => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = options.language || 'fr-FR';
@@ -229,7 +232,7 @@ export function speak(
           clearIosTimer();
         }
       }, 10_000);
-    }, 50);
+    }, 150);
   });
 }
 
@@ -267,7 +270,9 @@ export function getVoicesForLanguage(langCode: string): SpeechSynthesisVoice[] {
 export function initSpeechSynthesis() {
   if (!hasSpeechSynthesis()) return;
   loadVoices();
-  const u = new SpeechSynthesisUtterance('\u200B'); // zero-width space — plays instantly
+  // Single space is more reliably processed by iOS than a zero-width space.
+  // iOS must fire onend before granting permission for future async speak() calls.
+  const u = new SpeechSynthesisUtterance(' ');
   u.volume = 0;
   u.rate = 10;
   window.speechSynthesis.speak(u);
