@@ -1,0 +1,57 @@
+/*
+  ─────────────────────────────────────────────────────────────────
+  PWA / iOS Safe Area Additions
+  Add these to the TOP of your existing globals.css
+  ─────────────────────────────────────────────────────────────────
+*/
+
+/* Support iPhone notch + Dynamic Island + home bar */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+}
+
+/* Ensure body fills the full screen including safe areas */
+html, body {
+  /* Prevents elastic scroll bounce on iOS */
+  overscroll-behavior: none;
+  /* Full height including safe areas */
+  min-height: 100dvh;
+}
+
+/* Fix bottom nav to respect iPhone home bar */
+.bottom-nav-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Fix top bar to respect Dynamic Island / notch */
+.top-bar-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+/* Prevent text size adjustment on orientation change (iOS) */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Disable tap highlight on interactive elements (feels more native) */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Smooth scrolling but only when user hasn't opted out */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* PWA standalone mode — hide browser chrome indicators */
+@media (display-mode: standalone) {
+  /* Add any standalone-specific styles here */
+  /* e.g. you could show an in-app back button only in standalone */
+}

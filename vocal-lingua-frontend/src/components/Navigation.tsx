@@ -17,8 +17,15 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 pb-safe">
-      <div className="mx-4 mb-3">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50"
+      // Safe area padding so the nav sits above the iPhone home bar.
+      // env(safe-area-inset-bottom) is non-zero on notched iPhones (34px on
+      // iPhone X/11/12/13/14/15 series). We add it on top of the 12px we
+      // already want, capped so it never looks odd on non-notched devices.
+      style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+    >
+      <div className="mx-4">
         <div className="bg-white dark:bg-surface-dark-subtle border border-gray-100 dark:border-white/[0.06] rounded-3xl shadow-lg dark:shadow-black/40 px-2 py-1">
           <div className="flex items-center justify-around h-14">
             {NAV_ITEMS.map(({ href, label, icon: Icon, accent }) => {
@@ -30,8 +37,8 @@ export function BottomNav() {
                     <div className={cn(
                       'w-12 h-12 rounded-2xl flex items-center justify-center shadow-md transition-all',
                       isActive
-                        ? 'bg-brand-red shadow-red-glow scale-105'
-                        : 'bg-gradient-to-br from-brand-blue to-brand-blue-mid shadow-blue-glow'
+                        ? 'bg-brand-red shadow-red-500/30 scale-105'
+                        : 'bg-gradient-to-br from-brand-blue to-brand-blue-mid shadow-brand-blue/30'
                     )}>
                       <Icon size={20} className="text-white" />
                     </div>
@@ -88,12 +95,16 @@ export function TopBar({
   transparent?: boolean;
 }) {
   return (
-    <header className={cn(
-      'sticky top-0 z-40 transition-colors',
-      transparent
-        ? 'bg-transparent'
-        : 'bg-white/80 dark:bg-surface-dark/80 backdrop-blur-xl border-b border-gray-100/80 dark:border-white/[0.05]'
-    )}>
+    <header
+      className={cn(
+        'sticky top-0 z-40 transition-colors',
+        transparent
+          ? 'bg-transparent'
+          : 'bg-white/80 dark:bg-surface-dark/80 backdrop-blur-xl border-b border-gray-100/80 dark:border-white/[0.05]'
+      )}
+      // Push content below the Dynamic Island / notch on iPhone
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <div className="flex items-center justify-between h-14 px-5 max-w-lg mx-auto">
         <div>
           <h1 className="font-bold text-[15px] text-gray-900 dark:text-white leading-tight tracking-tight">
