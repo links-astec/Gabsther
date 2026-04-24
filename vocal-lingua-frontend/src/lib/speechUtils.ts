@@ -265,7 +265,7 @@ export function getVoicesForLanguage(langCode: string): SpeechSynthesisVoice[] {
  * actually start playing so the browser records a real "play within user
  * gesture" event. Chrome Android blocks future async speak() calls
  * (error: 'not-allowed') if the unlock utterance is cancelled before it plays.
- * The utterance is a zero-width space at max rate — it completes in < 50 ms.
+ * The utterance is a single space at max rate — it completes in < 50 ms.
  */
 export function initSpeechSynthesis() {
   if (!hasSpeechSynthesis()) return;
