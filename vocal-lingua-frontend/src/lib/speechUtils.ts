@@ -178,12 +178,13 @@ export function speak(
 
     clearIosTimer();
     window.speechSynthesis.cancel();
-    // resume() in case iOS left the synthesizer in a paused state after mic use
-    window.speechSynthesis.resume();
 
     // 150ms gives iOS time to switch the audio session from record → playback.
-    // 50ms was too short — the utterance would start but be silently dropped.
     setTimeout(() => {
+      // resume() right before speak() — iOS sometimes leaves synthesizer paused
+      // after mic use; calling resume() here (not outside the timeout) ensures
+      // it fires as close to the speak() call as possible.
+      window.speechSynthesis.resume();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = options.language || 'fr-FR';
       utterance.rate = options.rate ?? 0.9;
@@ -270,9 +271,10 @@ export function getVoicesForLanguage(langCode: string): SpeechSynthesisVoice[] {
 export function initSpeechSynthesis() {
   if (!hasSpeechSynthesis()) return;
   loadVoices();
-  // Single space is more reliably processed by iOS than a zero-width space.
-  // iOS must fire onend before granting permission for future async speak() calls.
-  const u = new SpeechSynthesisUtterance(' ');
+  // Use a real word — iOS needs onstart to fire (not just onend) to register
+  // that speech synthesis was "started" within a user gesture. A space or
+  // zero-width space may skip onstart entirely; a short word guarantees it.
+  const u = new SpeechSynthesisUtterance('ok');
   u.volume = 0;
   u.rate = 10;
   window.speechSynthesis.speak(u);

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Save, RefreshCw, ChevronDown, ChevronUp, Sparkles, BookOpen,
   Coffee, ShoppingCart, MapPin, Building2, Hand, Utensils, Briefcase, MessageCircle,
+  Volume2,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -276,13 +277,25 @@ function VoiceChatContent() {
                 S
               </div>
             )}
-            <div className={cn(
-              'max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
-              msg.role === 'user'
-                ? 'bg-brand-blue text-white rounded-br-sm'
-                : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm'
-            )}>
-              {msg.content}
+            <div className="flex flex-col gap-1 max-w-[78%]">
+              <div className={cn(
+                'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                msg.role === 'user'
+                  ? 'bg-brand-blue text-white rounded-br-sm'
+                  : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm'
+              )}>
+                {msg.content}
+              </div>
+              {msg.role === 'assistant' && (
+                <button
+                  onClick={() => speakText(frenchOnly(msg.content))}
+                  className="self-start flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-brand-blue dark:hover:text-brand-blue-light transition-colors px-1"
+                  title="Tap to hear"
+                >
+                  <Volume2 size={12} />
+                  Replay
+                </button>
+              )}
             </div>
           </motion.div>
         ))}

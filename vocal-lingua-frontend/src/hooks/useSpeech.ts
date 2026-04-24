@@ -129,7 +129,12 @@ export function useSpeech({
         }
       },
       onEnd: () => {
-        // Recognition ended (browser cut it off) — flush any accumulated text
+        // Recognition ended — mic releases the audio session here.
+        // Re-prime TTS immediately so iOS has the best chance of allowing
+        // the async speak() call that follows after the API responds.
+        // (Not a user gesture, but calling this at the earliest possible
+        // moment after mic-stop gives iOS more time to switch sessions.)
+        initSpeechSynthesis();
         if (accumulatedRef.current.trim()) {
           flushAccumulated(false);
         }
