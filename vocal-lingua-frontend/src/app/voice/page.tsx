@@ -70,6 +70,10 @@ function VoiceChatContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [, setLesson] = useState<LessonDetail | null>(null);
   const [sessionStart] = useState(Date.now());
+  // iOS: store pending AI text and let user trigger TTS via orb tap (user gesture required)
+  const [hasPendingReply, setHasPendingReply] = useState(false);
+  const pendingTTSRef = useRef('');
+  const isDirectSpeakingRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { recordActivity } = useStreak();
@@ -102,6 +106,33 @@ function VoiceChatContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  /**
+   * Calls speechSynthesis.speak() synchronously — must be invoked directly from a
+   * user gesture handler (tap/click) so iOS Safari grants audio session access.
+   */
+  const speakDirectly = useCallback((text: string, onDone?: () => void) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    isDirectSpeakingRef.current = true;
+    setOrbState('speaking');
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(frenchOnly(text));
+    utterance.lang = 'fr-FR';
+    utterance.rate = 0.9;
+    utterance.onend = () => {
+      isDirectSpeakingRef.current = false;
+      setOrbState('idle');
+      onDone?.();
+    };
+    utterance.onerror = (e: SpeechSynthesisErrorEvent) => {
+      isDirectSpeakingRef.current = false;
+      setOrbState('idle');
+      if (e.error !== 'interrupted' && e.error !== 'canceled') {
+        console.error('TTS error:', e.error);
+      }
+    };
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
   const handleFinalTranscript = useCallback(async (text: string) => {
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMsg]);
@@ -120,8 +151,10 @@ function VoiceChatContent() {
       setMessages((prev) => [...prev, aiMsg]);
       if (response.corrections.length > 0) setCorrections((prev) => [...prev, ...response.corrections]);
 
-      setOrbState('speaking');
-      await speakText(frenchOnly(response.reply));
+      // Store reply for user-gesture TTS (required on iOS Safari PWA)
+      pendingTTSRef.current = response.reply;
+      setHasPendingReply(true);
+      setOrbState('idle');
     } catch (err) {
       console.error(err);
       setMessages((prev) => [...prev, {
@@ -129,23 +162,33 @@ function VoiceChatContent() {
         content: "Désolée, une erreur s'est produite. (Sorry, an error occurred.) Please try again!",
         timestamp: new Date().toISOString(),
       }]);
-    } finally {
       setOrbState('idle');
     }
   }, [messages, selectedScenario, lessonId]);
 
-  const { isListening, isSpeaking, interimText, isSupported, startListening, stopListening, speakText } =
+  const { isListening, isSpeaking, interimText, isSupported, startListening, stopListening } =
     useSpeech({ language: 'fr-FR', onFinalTranscript: handleFinalTranscript });
 
   useEffect(() => {
+    // Don't override orbState while speakDirectly owns the audio session
+    if (isDirectSpeakingRef.current) return;
     if (isListening) setOrbState('listening');
     else if (isSpeaking) setOrbState('speaking');
     else if (orbState !== 'processing') setOrbState('idle');
   }, [isListening, isSpeaking]);
 
   const handleOrbPress = () => {
-    if (orbState === 'idle') startListening();
-    else if (orbState === 'listening') stopListening();
+    if (hasPendingReply) {
+      // User gesture → safe to call speechSynthesis.speak() on iOS
+      const text = pendingTTSRef.current;
+      pendingTTSRef.current = '';
+      setHasPendingReply(false);
+      speakDirectly(text, () => startListening());
+    } else if (orbState === 'idle') {
+      startListening();
+    } else if (orbState === 'listening') {
+      stopListening();
+    }
   };
 
   const handleSave = async () => {
@@ -288,7 +331,7 @@ function VoiceChatContent() {
               </div>
               {msg.role === 'assistant' && (
                 <button
-                  onClick={() => speakText(frenchOnly(msg.content))}
+                  onClick={() => speakDirectly(msg.content)}
                   className="self-start flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 hover:text-brand-blue dark:hover:text-brand-blue-light transition-colors px-1"
                   title="Tap to hear"
                 >
@@ -355,6 +398,16 @@ function VoiceChatContent() {
       <div className="flex-shrink-0 bg-white/80 dark:bg-gray-900/50 backdrop-blur border-t border-gray-200 dark:border-white/[0.04] flex flex-col items-center py-7 gap-4 pb-safe">
         {orbState === 'speaking' && (
           <VoiceWave isActive barCount={7} className="text-emerald-500 dark:text-emerald-400 h-8" />
+        )}
+        {hasPendingReply && orbState === 'idle' && (
+          <motion.p
+            className="text-sm font-medium text-brand-blue dark:text-blue-400"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: [0.6, 1, 0.6] }}
+            transition={{ duration: 1.6, repeat: Infinity }}
+          >
+            Tap to hear Sophie
+          </motion.p>
         )}
         <VoiceOrb state={orbState} onPress={handleOrbPress} onRelease={orbState === 'listening' ? stopListening : undefined} />
       </div>
