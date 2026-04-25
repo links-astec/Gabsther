@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "VocalLingua",
+    "slug": "vocal-lingua-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1d4ed8"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vocallingua.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "VocalLingua needs your microphone to listen to your French speech.",
+        "NSSpeechRecognitionUsageDescription": "VocalLingua uses speech recognition to understand your French.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#1d4ed8"
+      },
+      "package": "com.vocallingua.app",
+      "permissions": [
+        "RECORD_AUDIO",
+        "INTERNET",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [],
+    "extra": {
+      "apiUrl": "http://localhost:8000/api",
+      "eas": {
+        "projectId": "86c37165-9f2c-4b83-9bbf-1d8c03fa8bd6"
+      }
+    }
+  }
+}
